@@ -24,27 +24,31 @@ interface CustomFileMap {
     [fileId: string]: CustomFileData;
 }
 
+async function apiT() {
+    const api = axios.create({
+        baseURL: 'http://localhost:3001/user/'
+    })
+    const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiY2F1YW5lQGdtYWlsLmNvbSIsImlkIjoiNjA5YWZhNmJkMTIyNDFlNTYwYTY5YmE5IiwiaWF0IjoxNjIwNzY5Mzg5fQ.AGREDrsns0BsYhKqpaYr4tgLp12tVzfTnV_iswsleSw'
+    const response = await api.get('abacate', {
+        headers: { 'auth-token': token }
+    })
+    return response.data
+}
 
-// Helper method to attach our custom TypeScript types to the imported JSON file map.
 const prepareCustomFileMap = () => {
-    // const [DemoFsMap, setDemoFsMap] = useState({})
-    // const [baseFileMap2, setBaseFileMap] = useState({})
-    // const [rootFolderId2, setRootFolderId] = useState()
+    // const [baseFileMap, setBaseFileMap] = useState({})
+    // const [rootFolderId, setRootFolderId] = useState()
 
-    // const getUserContent = async () => {
-    //     const { data } = await api.get('abacate', {
+    // useEffect(() => {
+    //     api.get('abacate', {
     //         headers: { 'auth-token': token }
+    //     }).then(response => {
+    //         setRootFolderId(response.data.rootFolderId)
+    //         setBaseFileMap((response.data.fileMap as unknown) as CustomFileMap)
     //     })
-    //     console.log(data)
-    //     setDemoFsMap(data)
-    //     setBaseFileMap((data.fileMap as unknown) as CustomFileMap);
-    //     setRootFolderId(data.rootFolderId);
-    // }
-    // useEffect(() =>{
-    //     getUserContent()
     // }, [])
 
-    const DemoFsMap = {
+    const DemoFsMapMock = {
         "rootFolderId": "609bc2659453724cd08f2693",
         "fileMap": {
           "609bc2659453724cd08f2693": {
@@ -92,13 +96,13 @@ const prepareCustomFileMap = () => {
         }
       }
 
-    const baseFileMap = (DemoFsMap.fileMap as unknown) as CustomFileMap;
-    const rootFolderId = DemoFsMap.rootFolderId;
+    const baseFileMap = (DemoFsMapMock.fileMap as unknown) as CustomFileMap;
+    const rootFolderId = DemoFsMapMock.rootFolderId;
     return { baseFileMap, rootFolderId };
 };
 
 const useCustomFileMap = () => {
-    const { baseFileMap, rootFolderId } = useMemo(prepareCustomFileMap, []);
+    const { baseFileMap, rootFolderId } = prepareCustomFileMap()
 
     // Setup the React state for our file map and the current folder.
     const [fileMap, setFileMap] = useState(baseFileMap);
@@ -132,7 +136,6 @@ const useCustomFileMap = () => {
                 ...parent,
                 childrenIds: [...parent.childrenIds!, newFolderId],
             };
-
             return newFileMap;
         });
     }, []);
@@ -195,7 +198,7 @@ export const useFileActionHandler = (
                     return;
                 }
             } else if (data.id === ChonkyActions.CreateFolder.id) {
-                const folderName = prompt('Provide the name for your new folder:');
+                const folderName = prompt('digite o nome da nova pasta:');
                 if (folderName) createFolder(folderName);
             }
         },
@@ -205,26 +208,23 @@ export const useFileActionHandler = (
 
 export type VFSProps = Partial<FileBrowserProps>;
 
-export const VFSBrowser: React.FC<VFSProps> = React.memo((props) => {
+export const VFSBrowser: React.FC<VFSProps> = (props) => {
     const {
         fileMap,
         currentFolderId,
         setCurrentFolderId,
         createFolder,
     } = useCustomFileMap();
-    const files = useFiles(fileMap, currentFolderId);
-    const folderChain = useFolderChain(fileMap, currentFolderId);
+    const files = useFiles(fileMap, currentFolderId); // []
+    const folderChain = useFolderChain(fileMap, currentFolderId); // []
     const handleFileAction = useFileActionHandler(
         setCurrentFolderId,
         createFolder
     );
-    const fileActions = useMemo(
-        () => [ChonkyActions.CreateFolder],
-        []
-    );
+    const fileActions = [ChonkyActions.CreateFolder]
     return (
         <>
-            <div style={{ height: 400 }}>
+            <div style={{ height: 350 }}>
                 <FullFileBrowser
                     files={files}
                     folderChain={folderChain}
@@ -235,4 +235,4 @@ export const VFSBrowser: React.FC<VFSProps> = React.memo((props) => {
             </div>
         </>
     );
-});
+};
