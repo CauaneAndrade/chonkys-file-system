@@ -1,54 +1,13 @@
-import axios from 'axios';
 import {
-    ChonkyActions, FileActionHandler, FullFileBrowser
+    ChonkyActions,
+    FileActionHandler,
+    FullFileBrowser
 } from 'chonky';
 import React, { useEffect, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-
-const api = axios.create({
-    baseURL: 'http://localhost:3001/user/'
-})
-const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiY2F1YW5lQGdtYWlsLmNvbSIsImlkIjoiNjA5YWZhNmJkMTIyNDFlNTYwYTY5YmE5IiwiaWF0IjoxNjIwNzY5Mzg5fQ.AGREDrsns0BsYhKqpaYr4tgLp12tVzfTnV_iswsleSw'
-
-function Dropzone(props) {
-    const sendFile = async (file) => {
-        const dataForm = new FormData();
-        dataForm.append('file', file);
-        const res = await fetch(`http://localhost:8001/upload`, {
-            method: 'POST',
-            body: dataForm,
-        });
-        const data = await res.json();
-        console.log(data);
-    };
-
-    const onDrop = (acceptedFiles) => {
-        const name = acceptedFiles[0].name
-        const path = props.path()
-        props.func(name, path)
-    }
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop })
-
-    return (
-        <div {...getRootProps()} style={{
-            boxShadow: 'inset rgba(49, 63, 190, 0.6) 0 100px 0',
-            lineHeight: '100px',
-            textAlign: 'center',
-            fontSize: '1.4em',
-            marginBottom: 20,
-            borderRadius: 4,
-            color: '#ffffff',
-            height: 100,
-        }}>
-            <input {...getInputProps()} />
-            {
-                isDragActive ?
-                    <p>Solte o arquivo aqui</p> :
-                    <p>Arraste e solte o arquivo aqui ou clique para selecionar um arquivo</p>
-            }
-        </div>
-    )
-}
+import api from '../../api';
+import CustomDropzone from './Dropzone';
+import getParent from './utils';
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiY2F1YW5lQGdtYWlsLmNvbSIsImlkIjoiNjA5ZTcxNjA1MzI3OGI5ZWEwNjkzMjNiIiwiaWF0IjoxNjIwOTk2NDUxfQ.41zmvR_2qKgs8NTwxz2lt20xGfqXc_ePFXsplC5XhDg'
 
 const VFSBrowser: React.FC = (props) => {
     const [fileMap, setFileMap] = useState({})
@@ -58,7 +17,7 @@ const VFSBrowser: React.FC = (props) => {
 
     useEffect(() => {
         async function apiCall() {
-            const response = await api.get('abacate', {
+            const response = await api.get('content', {
                 headers: { 'auth-token': token }
             })
             const data = response.data
@@ -70,14 +29,16 @@ const VFSBrowser: React.FC = (props) => {
             const files = childrenIds.map((fileId: string) => fM[fileId]); setFile(files)
         }
         apiCall()
-    }, [null])
+    }, [null]) // chamado apenas uma
 
-    const fileActions = [
-        ChonkyActions.CreateFolder,
-        ChonkyActions.DownloadFiles,
-        ChonkyActions.DeleteFiles
-    ]
-    const handleAction: FileActionHandler = (data) => {
+    const sendFolderS3 = async (name, path) => {
+        const dataForm = { name, path }
+        const response = await api
+            .post('content/folder', dataForm, { headers: { 'auth-token': token } })
+        console.log(response);
+    };
+
+    const handleAction: FileActionHandler = async (data) => {
         if (data.id === ChonkyActions.OpenFiles.id && data.payload.targetFile['isDir']) {
             const targetFile = data.payload.targetFile
             const currentFolder = fileMap[targetFile['id']];
@@ -116,18 +77,18 @@ const VFSBrowser: React.FC = (props) => {
             if (folderName) {
                 const newFileMap = { ...fileMap };
                 const newFolderId = `new-folder-${Math.random()}`;
+                const parent = newFileMap[currentFolderId];
                 newFileMap[newFolderId] = {
                     id: newFolderId,
                     name: folderName,
                     isDir: true,
                     modDate: new Date(),
-                    parentId: currentFolderId,
+                    parentId: parent['name'],
                     childrenIds: [],
                     childrenCount: 0,
                 };
 
                 // Update parent folder to reference the new folder.
-                const parent = newFileMap[currentFolderId];
                 const newChildren = [...parent.childrenIds!, newFolderId]
                 newFileMap[currentFolderId] = {
                     ...parent,
@@ -138,6 +99,8 @@ const VFSBrowser: React.FC = (props) => {
                 const files = childrenIds.map((fileId: string) => newFileMap[fileId]);
                 setFileMap(newFileMap)
                 setFile(files)
+                const path = await getParent(currentFolderId, fileMap, [])
+                await sendFolderS3(folderName, path.reverse().join('/'))
             }
         }
     };
@@ -163,13 +126,19 @@ const VFSBrowser: React.FC = (props) => {
         const files = childrenIds.map((fileId: string) => newFileMap[fileId]);
         setFileMap(newFileMap); setFile(files)
     }
-    function path() {
-        return currentFolderId
-    }
+
+    function path() { return currentFolderId }
+    function getFileMap() { return fileMap }
+
+    const fileActions = [
+        ChonkyActions.CreateFolder,
+        ChonkyActions.DownloadFiles,
+        ChonkyActions.DeleteFiles
+    ]
     return (
         <>
             <div style={{ height: 350 }}>
-                <Dropzone path={path} func={setItemFileMap} />
+                <CustomDropzone path={path} func={setItemFileMap} fileMap={getFileMap} token={token} />
                 <FullFileBrowser
                     files={files}
                     folderChain={folderChain}
@@ -182,12 +151,4 @@ const VFSBrowser: React.FC = (props) => {
     );
 };
 
-const ComponenteFinal: React.FC = () => {
-    return (
-        <div>
-            <VFSBrowser />
-        </div>
-    );
-};
-
-export default ComponenteFinal
+export default VFSBrowser
