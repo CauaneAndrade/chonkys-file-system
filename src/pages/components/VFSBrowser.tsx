@@ -5,16 +5,17 @@ import {
 } from 'chonky';
 import React, { useEffect, useState } from 'react';
 import api from '../../api';
-import CustomDropzone from './Dropzone';
-import getParent from './utils';
-const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiY2F1YW5lQGdtYWlsLmNvbSIsImlkIjoiNjA5ZTcxNjA1MzI3OGI5ZWEwNjkzMjNiIiwiaWF0IjoxNjIwOTk2NDUxfQ.41zmvR_2qKgs8NTwxz2lt20xGfqXc_ePFXsplC5XhDg'
+import CustomDropzone from './Dropzone/Dropzone';
+import { getToken } from './Login/UseToken';
+import { getParent, removeItemS3, sendFolderS3 } from './utils';
+
+const token = getToken()
 
 const VFSBrowser: React.FC = (props) => {
     const [fileMap, setFileMap] = useState({})
     const [files, setFile] = useState([])
     const [folderChain, setFolderChain] = useState([])
     const [currentFolderId, setCurrentFolderId] = useState('')
-
     useEffect(() => {
         async function apiCall() {
             const response = await api.get('content', {
@@ -31,79 +32,86 @@ const VFSBrowser: React.FC = (props) => {
         apiCall()
     }, [null]) // chamado apenas uma
 
-    const sendFolderS3 = async (name, path) => {
-        const dataForm = { name, path }
-        const response = await api
-            .post('content/folder', dataForm, { headers: { 'auth-token': token } })
-        console.log(response);
-    };
-
-    const handleAction: FileActionHandler = async (data) => {
-        if (data.id === ChonkyActions.OpenFiles.id && data.payload.targetFile['isDir']) {
-            const targetFile = data.payload.targetFile
-            const currentFolder = fileMap[targetFile['id']];
-            const childrenIds = currentFolder.childrenIds!;
-            const files = childrenIds.map((fileId: string) => fileMap[fileId]);
-            setFile(files); setCurrentFolderId(currentFolder['id']);
-            setFolderChain((currentFileMap) => {
-                let newCurrentFileMap = [...currentFileMap]
-                if (newCurrentFileMap.includes(targetFile)) {
-                    newCurrentFileMap.pop(); newCurrentFileMap.pop() // não sei o porquê, mas assim funciona
-                }
-                return [...newCurrentFileMap, targetFile]
-            })
-        } else if (data.id === ChonkyActions.DeleteFiles.id) {
-            const newFileMap = { ...fileMap };
-            data.state.selectedFiles.forEach((file) => {
+    async function removeFiles(data) {
+        const newFileMap = { ...fileMap };
+        const path = await getParent(currentFolderId, fileMap)
+        data.state.selectedFiles.forEach(async (file) => {
+            const fileRemoved = await removeItemS3(path, file.name)
+            if (fileRemoved.data.response) {
                 delete newFileMap[file.id]; // Delete file from the file map.
                 const parentId = file.parentId
                 if (parentId) {
                     const parent = newFileMap[parentId]!;
-                    const newChildrenIds = parent.childrenIds!.filter(
-                        (id) => id !== file.id
-                    );
+                    const newChildrenIds = parent.childrenIds!.filter((id) => id !== file.id);
                     newFileMap[parentId] = {
                         ...parent,
                         childrenIds: newChildrenIds,
                         childrenCount: newChildrenIds.length,
                     };
                 }
-            });
-            setFileMap(newFileMap)
+            }
+            await setFileMap(newFileMap)
             const childrenIds = newFileMap[currentFolderId].childrenIds!;
-            const newFiles = childrenIds.map((fileId: string) => newFileMap[fileId]); setFile(newFiles)
+            const newFiles = childrenIds.map((fileId: string) => newFileMap[fileId]);
+            await setFile(newFiles)
+        });
+    }
+
+    async function createFolder(folderName) {
+        const newFileMap = { ...fileMap };
+        const newFolderId = `new-folder-${Math.random()}`;
+        const parent = newFileMap[currentFolderId];
+        newFileMap[newFolderId] = {
+            id: newFolderId,
+            name: folderName,
+            isDir: true,
+            modDate: new Date(),
+            parentId: parent['name'],
+            childrenIds: [],
+            childrenCount: 0,
+        };
+
+        // Update parent folder to reference the new folder.
+        const newChildren = [...parent.childrenIds!, newFolderId]
+        newFileMap[currentFolderId] = {
+            ...parent,
+            childrenIds: newChildren,
+            childrenCount: newChildren.length
+        };
+        const childrenIds = newFileMap[currentFolderId].childrenIds!;
+        const files = childrenIds.map((fileId: string) => newFileMap[fileId]);
+        setFileMap(newFileMap)
+        setFile(files)
+        const path = await getParent(currentFolderId, fileMap)
+        await sendFolderS3(folderName, path)
+    }
+
+    function setCurrentPathFolder(data) {
+        const targetFile = data.payload.targetFile
+        const currentFolder = fileMap[targetFile['id']];
+        const childrenIds = currentFolder.childrenIds!;
+        const files = childrenIds.map((fileId: string) => fileMap[fileId]);
+        setFile(files); setCurrentFolderId(currentFolder['id']);
+        setFolderChain((currentFileMap) => {
+            let newCurrentFileMap = [...currentFileMap]
+            if (newCurrentFileMap.includes(targetFile)) {
+                newCurrentFileMap.pop(); newCurrentFileMap.pop() // não sei o porquê, mas assim funciona
+            }
+            return [...newCurrentFileMap, targetFile]
+        })
+    }
+
+    const handleAction: FileActionHandler = async (data) => {
+        if (data.id === ChonkyActions.OpenFiles.id && data.payload.targetFile['isDir']) {
+            setCurrentPathFolder(data)
+        } else if (data.id === ChonkyActions.DeleteFiles.id) {
+            removeFiles(data)
         } else if (data.id === ChonkyActions.CreateFolder.id) {
             const folderName = prompt('digite o nome da pasta:');
-            if (folderName) {
-                const newFileMap = { ...fileMap };
-                const newFolderId = `new-folder-${Math.random()}`;
-                const parent = newFileMap[currentFolderId];
-                newFileMap[newFolderId] = {
-                    id: newFolderId,
-                    name: folderName,
-                    isDir: true,
-                    modDate: new Date(),
-                    parentId: parent['name'],
-                    childrenIds: [],
-                    childrenCount: 0,
-                };
-
-                // Update parent folder to reference the new folder.
-                const newChildren = [...parent.childrenIds!, newFolderId]
-                newFileMap[currentFolderId] = {
-                    ...parent,
-                    childrenIds: newChildren,
-                    childrenCount: newChildren.length
-                };
-                const childrenIds = newFileMap[currentFolderId].childrenIds!;
-                const files = childrenIds.map((fileId: string) => newFileMap[fileId]);
-                setFileMap(newFileMap)
-                setFile(files)
-                const path = await getParent(currentFolderId, fileMap, [])
-                await sendFolderS3(folderName, path.reverse().join('/'))
-            }
+            if (folderName) { createFolder(folderName) }
         }
     };
+
     function setItemFileMap(folderName, currentFolderIdTest) {
         const newFileMap = { ...fileMap };
         const newFolderId = `new-file-test-${Math.random()}`;
@@ -127,7 +135,7 @@ const VFSBrowser: React.FC = (props) => {
         setFileMap(newFileMap); setFile(files)
     }
 
-    function path() { return currentFolderId }
+    function getCurrentFolder() { return currentFolderId }
     function getFileMap() { return fileMap }
 
     const fileActions = [
@@ -138,7 +146,7 @@ const VFSBrowser: React.FC = (props) => {
     return (
         <>
             <div style={{ height: 350 }}>
-                <CustomDropzone path={path} func={setItemFileMap} fileMap={getFileMap} token={token} />
+                <CustomDropzone path={getCurrentFolder} func={setItemFileMap} fileMap={getFileMap} token={token} />
                 <FullFileBrowser
                     files={files}
                     folderChain={folderChain}
