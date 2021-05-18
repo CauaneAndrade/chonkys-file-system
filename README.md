@@ -1,61 +1,50 @@
-# reactjs-setup-sample
-based on https://www.youtube.com/watch?v=1nVUfZg2dSA
+# 'BizDrive' frontend
 
-## steps
-1. usar o create next-app ao invés do create-react-app
-´´´
-yarn create next-app app-name
-´´´
-https://www.youtube.com/watch?v=6TEo2AxW-oQ
+[![app demo](app-demo.PNG)](https://youtu.be/m7VoffWYI9k "App Demo")
 
-2. remover arquivos que não serão utilizados
-- pages/api/*
-- public/*
-- styles/*
+``Projeto está usando nextjs e sintaxe typescript``
 
-3. adicionar typescript
+### Para rodar o projeto localmente
+1. estar com o backend rodando na porta `3001`
+
+2. criar um usuário na url `localhost:3001/auth/signup`
 ```
-yarn add typescript @types/react @types/node -D
-```
+# POST /auth/signup
+# Host: localhost:3001
 
-4. renomear
-- pages/_app.js -> _app.tsx
-- pages/index.js -> index.tsx
-
-5. limpar arquivo index.tsx e _app.tsx
-
-6. instalar eslint como dep de desenvolvimento e inicializá-lo
-```
-yarn add eslint -D
-yarn eslint --init
-yarn add prettier eslint-plugin-prettier eslint-config-prettier -D
-```
-    - alterar no arquivo .eslintrc.json:
-        - dentro de "env" -> "jest": true
-        -  dentro de "extends" -> "plugin:@typescript-eslint/recommended", "prettier/@typescript-eslint", "prettier/standard", "prettier/react"
-        - dentro de "plugins" -> "prettier"
-        - dentro de "rules" -> "prettier/prettier": "error", "react/prop-types": "off"
-
-7. adicionar na raiz um arquivo ".eslintignore"
-```
-node_modules
-.next
-/*.js
+{
+    "username": "usuário1",
+    "email": "teste@teste.com",
+    "password": "senhadificil"
+}
 ```
 
-8. instalar os plugins no vscode
-- Editorconfig for VS Code
-
-9. Integrar Styled-components com o Next
+3. logar na aplicação na url `localhost:3001/auth/login`
 ```
-yarn add styled-components
-yarn add @types/styled-components -D
-```
-criar um arquivo "bable.config.js" na raiz
-    - https://github.com/vercel/next.js/blob/canary/examples/with-styled-components/.babelrc
-criar um arquivo "pages/_documents.js"
-    - https://github.com/vercel/next.js/blob/canary/examples/with-styled-components/pages/_document.js
+# POST /auth/login
+# Host: localhost:3001
 
-### pesquisar
-- diferença entre NPM e YARN
-- o que nextjs
+{
+    "email": "teste@teste.com",
+    "password": "senhadificil"
+}
+```
+a resposta deve ser nesse formato
+```
+{
+  "error": null,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoidGVzdGVAZ21haWwuY29tIiwiaWQiOiI2MGEzYmQ0ZTU3ZjEzZjQxZDQyNWVjZjIiLCJpYXQiOjE2MjEzNDM1NzJ9.Onj5UDCGufiS-DMtxG9ALjSsupuu11iNOfIqvrPxJDc"
+  }
+}
+```
+
+4. pegar o token e alterar no arquivo [useToken.tsx](https://github.com/CauaneAndrade/chonkys-file-system/blob/master/src/pages/components/Login/UseToken.tsx#L11)
+```
+const getToken = () => {
+    return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoidGVzdGVAZ21haWwuY29tIiwiaWQiOiI2MGEzYmQ0ZTU3ZjEzZjQxZDQyNWVjZjIiLCJpYXQiOjE2MjEzNDM1NzJ9.Onj5UDCGufiS-DMtxG9ALjSsupuu11iNOfIqvrPxJDc"
+}
+```
+
+5. com esses passos deve ser possível subir a aplicação, sem problemas
+    - ambiente de dev: `npm run dev`
