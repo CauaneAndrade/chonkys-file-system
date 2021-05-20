@@ -1,3 +1,5 @@
+import axios from 'axios';
+import fileDownload from 'js-file-download';
 import api from '../../api';
 import { getToken } from './Login/UseToken';
 
@@ -23,5 +25,22 @@ const removeItemS3 = async (path, fileName) => {
     return response
 }
 
-export { getParent, sendFolderS3, removeItemS3 };
+const handleDownload = (url, filename) => {
+    axios
+        .get(url, {
+            responseType: 'blob'
+        })
+        .then((res) => {
+            fileDownload(res.data, filename)
+        })
+}
+
+const changeFileName = async (path, newName) => {
+    const dataForm = { path, newName }
+    const response = await api.post('content/update', dataForm, {
+        headers: { 'auth-token': token }
+    })
+}
+
+export { getParent, sendFolderS3, removeItemS3, handleDownload, changeFileName };
 
